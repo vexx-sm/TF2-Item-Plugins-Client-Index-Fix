@@ -1,3 +1,4 @@
-
-scripting/spcomp.exe
-scripting/compile.exe
+.vscode
+scripting/*.smx
+scripting/*/**.smx
+scripting/*.exe

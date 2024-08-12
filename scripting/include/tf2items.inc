@@ -154,7 +154,7 @@ native int TF2Items_GetItemIndex(Handle hItem);
  * @param hItem		Handle to the TF2Items object that we'll be operating with.
  * @return			New entity quality.
  */
-native int tTF2Items_GetQuality(Handle hItem); 
+native int TF2Items_GetQuality(Handle hItem); 
 
 /**
  * Gets the item's level value. This value can range from 0 to 127.

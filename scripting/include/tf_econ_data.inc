@@ -39,10 +39,23 @@ enum TFEconParticleSet {
 typedef ItemFilterCriteria = function bool(int itemdef, any data);
 
 /**
+ * Callback for `TF2Econ_GetAttributeList`.  Return `true` if the specified attribute definition
+ * index should be added to the returned `ArrayList`.
+ * 
+ * This prototype is the same as `TF2Econ_GetItemList`.  Take care to not mix up the callbacks.
+ */
+typedef AttributeFilterCriteria = function bool(int attrdef, any data);
+
+/**
  * Returns true if there is an item corresponding to the given item definition index.
  * TF_ITEMDEF_DEFAULT returns false here.
  */
 native bool TF2Econ_IsValidItemDefinition(int itemdef);
+
+/**
+ * Returns true if item is in base set (corresponds to the "baseitem" key).
+ */
+native bool TF2Econ_IsItemInBaseSet(int itemdef);
 
 /**
  * Returns the item's name (corresponds to the "name" key).
@@ -109,7 +122,9 @@ native int TF2Econ_GetItemRarity(int itemdef);
  * Returns an `ArrayList` containing attribute defindex / value pairs corresponding to the given
  * item definition, or `null` if not a valid item definition.
  * 
- * The value is a raw 32-bit value which may represent an int, float, or pointer.
+ * The `ArrayList` has a blocksize of 2.  Block 0 contains the attribute defindex; block 1
+ * contains the attribute value, which is a 32-bit value that may represent an int, float, or
+ * pointer to a complex type.
  * 
  * This handle is owned by the calling plugin, so it should be `delete`d when not needed
  * anymore.
@@ -129,6 +144,8 @@ native bool TF2Econ_GetItemDefinitionString(int itemdef, const char[] key,
  * Returns an ArrayList containing all valid item definition indices.  If an ItemFilterCriteria
  * callback is passed in, the ArrayList only contains defindexes that the callback returned
  * `true` on.
+ * 
+ * The resulting ArrayList does not have a defined order.
  * 
  * This handle is owned by the calling plugin, so it should be `delete`d when not needed
  * anymore.
@@ -206,6 +223,19 @@ native bool TF2Econ_GetAttributeDefinitionString(int attrdef, const char[] key,
  * correspond to an attribute.
  */
 native int TF2Econ_TranslateAttributeNameToDefinitionIndex(const char[] name);
+
+/**
+ * Returns an ArrayList containing all valid attribute definition indices.  If an
+ * AttributeFilterCriteria callback is passed in, the ArrayList only contains attribute
+ * definition indices that the callback returned `true` on.
+ * 
+ * The resulting ArrayList does not have a defined order.
+ * 
+ * This handle is owned by the calling plugin, so it should be `delete`d when not needed
+ * anymore.
+ */
+native ArrayList TF2Econ_GetAttributeList(AttributeFilterCriteria func = INVALID_FUNCTION,
+		any data = 0);
 
 /**
  * Stores the quality name in the given buffer and returns true if given a valid quality value,
@@ -291,6 +321,14 @@ native ArrayList TF2Econ_GetParticleAttributeList(
  * Handle is owned by the calling plugin.
  */
 native ArrayList TF2Econ_GetPaintKitDefinitionList();
+
+/**
+ * Returns the definition index of a given map name, or 0 if not valid.
+ * 
+ * Note that the name "Missing" also points to a valid map definition, and will also return 0;
+ * the zero-on-invalid case is intended to match the behavior of the game.
+ */
+native int TF2Econ_GetMapDefinitionIndexByName(const char[] name);
 
 /**
  * Returns the address of the singleton CTFItemSchema (subclass of CEconItemSchema).
