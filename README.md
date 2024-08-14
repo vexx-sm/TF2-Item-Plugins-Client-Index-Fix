@@ -6,7 +6,7 @@ A 2024 refresh rewrite for plugins that manage player cosmetics & weapons, along
 
 Some months ago I started developing private plugins for communities that modify items for the game. It **IS AGAINST TOS**, and I know this can't be released on **AlliedModders** because of such, but because **VALVe** doesn't care for their game and it's been 7 years since a token ban has been issued I'll be releasing these public.
 
-As [404](https://github.com/404UNFca) said once:
+As **NiagaraDryGuy/404** said once:
 ```
 It technically is against the TOS, and using something like it could have potentially gotten your server blacklisted about 8-9 years ago. Nowadays, not so much. Many community servers in existence are using this system.
 
@@ -16,7 +16,7 @@ TF2 servers have not suffered any GLST token bans in many years. Even CS:GO serv
 
 Basically, by using this plugin, you are acknowledging that there is still the possibility that Valve could come around one day and blacklist your server. Don't blame me if such a thing happens either.
 ```
-[source](https://github.com/NiagaraDryGuy/TF2ServersidePlayerAttachmentFixer/blob/90c2a2f41cd8b4fc872de59d05114913064066cd/README.md#frequently-asked-question-yes-singular)
+[source](https://github.com/delux-internal/TF2ServersidePlayerAttachmentFixer/blob/034847e92814dc879b0829bd4072924857cb17dd/README.md)
 
 I might make some other releases if people want things fixed or whatever. I just release them because keeping them private is worthless, they're already everywhere and even some other devs have made their own versions of this public as well.
 Feel free to use these plugins wherever you want.
