@@ -9,15 +9,15 @@
 #pragma newdecls required
 
 #define PLUGIN_VERSION "4.0.0"
-#define DEBUG		   true
+#define DEBUG          true
 
 public Plugin myinfo =
 {
-	name		= "TF2 Item Plugins - Cosmetics Manager",
-	author		= "Lucas 'punteroo' Maza",
-	description = "Customize your cosmetic items and manage your server inventory.",
-	version		= PLUGIN_VERSION,
-	url			= "https://github.com/punteroo/TF2-Item-Plugins"
+    name        = "TF2 Item Plugins - Cosmetics Manager",
+    author      = "Lucas 'punteroo' Maza",
+    description = "Customize your cosmetic items and manage your server inventory.",
+    version     = PLUGIN_VERSION,
+    url         = "https://github.com/punteroo/TF2-Item-Plugins"
 };
 
 /**
@@ -27,18 +27,18 @@ public Plugin myinfo =
  */
 public Handle TF2ItemPlugin_LoadRegenerateSDK()
 {
-	// Load TF2 gamedata.
-	Handle hGameConf = LoadGameConfigFile("sm-tf2.games");
+    // Load TF2 gamedata.
+    Handle hGameConf = LoadGameConfigFile("sm-tf2.games");
 
-	// Prepare the SDK call for the player entity.
-	StartPrepSDKCall(SDKCall_Player);
+    // Prepare the SDK call for the player entity.
+    StartPrepSDKCall(SDKCall_Player);
 
-	// Set the SDK call to find the "Regenerate" signature.
-	PrepSDKCall_SetFromConf(hGameConf, SDKConf_Signature, "Regenerate");
-	PrepSDKCall_AddParameter(SDKType_Bool, SDKPass_Plain);
+    // Set the SDK call to find the "Regenerate" signature.
+    PrepSDKCall_SetFromConf(hGameConf, SDKConf_Signature, "Regenerate");
+    PrepSDKCall_AddParameter(SDKType_Bool, SDKPass_Plain);
 
-	// End the SDK call preparation.
-	return EndPrepSDKCall();
+    // End the SDK call preparation.
+    return EndPrepSDKCall();
 }
 
 /**
@@ -48,110 +48,118 @@ public Handle TF2ItemPlugin_LoadRegenerateSDK()
  */
 public void TF2ItemPlugin_AttachSpawnRoomHooks()
 {
-	// Declare a starting index for the spawn room entities.
-	int trigger = -1;
+    // Declare a starting index for the spawn room entities.
+    int trigger = -1;
 
-	while ((trigger = FindEntityByClassname(trigger, "func_respawnroom")) != -1)
-	{
-		// Hook callbacks into the trigger.
-		SDKHook(trigger, SDKHook_StartTouch, OnStartTouchSpawnRoom);
-		SDKHook(trigger, SDKHook_EndTouch, OnEndTouchSpawnRoom);
-	}
+    while ((trigger = FindEntityByClassname(trigger, "func_respawnroom")) != -1)
+    {
+        // Hook callbacks into the trigger.
+        SDKHook(trigger, SDKHook_StartTouch, OnStartTouchSpawnRoom);
+        SDKHook(trigger, SDKHook_EndTouch, OnEndTouchSpawnRoom);
+    }
 }
 
 public Action OnStartTouchSpawnRoom(int entity, int other)
 {
-	// Is this entity a player?
-	if (!IsClientInGame(other))
-		return Plugin_Continue;
+    // Check if the entity is a valid client index
+    if (other < 1 || other > MaxClients)
+        return Plugin_Continue;
 
-	// If player is alive and real, mark them as in spawn room.
-	if (IsPlayerAlive(other) && !IsClientSourceTV(other) && !IsClientObserver(other) && other <= MaxClients)
-		g_bInSpawnRoom[GetClientOfUserId(other)] = true;
+    // Is this entity a player?
+    if (!IsClientInGame(other))
+        return Plugin_Continue;
 
-	return Plugin_Continue;
+    // If player is alive and real, mark them as in spawn room.
+    if (IsPlayerAlive(other) && !IsClientSourceTV(other) && !IsClientObserver(other))
+        g_bInSpawnRoom[other] = true;
+
+    return Plugin_Continue;
 }
 
 public Action OnEndTouchSpawnRoom(int entity, int other)
 {
-	// Is this entity a player?
-	if (!IsClientInGame(other))
-		return Plugin_Continue;
+    // Check if the entity is a valid client index
+    if (other < 1 || other > MaxClients)
+        return Plugin_Continue;
 
-	// If player is alive and real, mark them as not in spawn room.
-	if (IsPlayerAlive(other) && !IsClientSourceTV(other) && !IsClientObserver(other))
-		g_bInSpawnRoom[GetClientOfUserId(other)] = false;
+    // Is this entity a player?
+    if (!IsClientInGame(other))
+        return Plugin_Continue;
 
-	return Plugin_Continue;
+    // If player is alive and real, mark them as not in spawn room.
+    if (IsPlayerAlive(other) && !IsClientSourceTV(other) && !IsClientObserver(other))
+        g_bInSpawnRoom[other] = false;
+
+    return Plugin_Continue;
 }
 
 public void OnPluginStart()
 {
-	g_cvar_cosmetics_onlySpawn			 = CreateConVar("tf2items_cosmetics_spawn_only", "0.0",
-														"If enabled, cosmetic overrides can only be changed in spawn regions.", 0, true, 0.0, true, 1.0);
+    g_cvar_cosmetics_onlySpawn         = CreateConVar("tf2items_cosmetics_spawn_only", "0.0",
+                                            "If enabled, cosmetic overrides can only be changed in spawn regions.", 0, true, 0.0, true, 1.0);
 
-	g_cvar_cosmetics_unusualEffectsURL	 = CreateConVar("tf2items_cosmetics_unusuals_url", "https://raw.githubusercontent.com/punteroo/TF2-Item-Plugins/production/tf2_unusuals.json",
-														"URL from where to fetch the Unusual effects data.");
+    g_cvar_cosmetics_unusualEffectsURL = CreateConVar("tf2items_cosmetics_unusuals_url", "https://raw.githubusercontent.com/punteroo/TF2-Item-Plugins/production/tf2_unusuals.json",
+                                            "URL from where to fetch the Unusual effects data.");
 
-	g_cvar_cosmetics_searchTimeout		 = CreateConVar("tf2items_cosmetics_search_timeout", "15.0",
-														"The amount of time (in seconds) to wait before timing out a player Unusual effect search.", 0, true, 5.0, true, 60.0);
+    g_cvar_cosmetics_searchTimeout     = CreateConVar("tf2items_cosmetics_search_timeout", "15.0",
+                                            "The amount of time (in seconds) to wait before timing out a player Unusual effect search.", 0, true, 5.0, true, 60.0);
 
-	g_cvar_cosmetics_databaseCooldown	 = CreateConVar("tf2items_cosmetics_database_cooldown", "15.0",
-														"The amount of time in seconds to wait before a player can perform a database action. -1 disables the cooldown.", 0, true, -1.0, true, 60.0);
+    g_cvar_cosmetics_databaseCooldown  = CreateConVar("tf2items_cosmetics_database_cooldown", "15.0",
+                                            "The amount of time in seconds to wait before a player can perform a database action. -1 disables the cooldown.", 0, true, -1.0, true, 60.0);
 
-	// Load the "Regenerate" SDK call.
-	hRegen								 = TF2ItemPlugin_LoadRegenerateSDK();
+    // Load the "Regenerate" SDK call.
+    hRegen                             = TF2ItemPlugin_LoadRegenerateSDK();
 
-	// Find the network offsets for the weapon clip and ammo.
-	clipOff								 = FindSendPropInfo("CTFWeaponBase", "m_iClip1");
-	ammoOff								 = FindSendPropInfo("CTFPlayer", "m_iAmmo");
+    // Find the network offsets for the weapon clip and ammo.
+    clipOff                            = FindSendPropInfo("CTFWeaponBase", "m_iClip1");
+    ammoOff                            = FindSendPropInfo("CTFPlayer", "m_iAmmo");
 
-	// Register the cosmetic manager commands.
-	static const char commandNames[][24] = { "sm_hats", "sm_hat", "sm_cosmetics", "sm_cosmetics", "sm_myhats" };
-	for (int i = 0; i < sizeof(commandNames); i++)
-		RegAdminCmd(commandNames[i], CMD_TF2ItemPlugin_CosmeticManager, ADMFLAG_GENERIC, "Manage your cosmetics on the server.");
+    // Register the cosmetic manager commands.
+    static const char commandNames[][24] = { "sm_hats", "sm_hat", "sm_cosmetics", "sm_cosmetic", "sm_myhats" };
+    for (int i = 0; i < sizeof(commandNames); i++)
+        RegAdminCmd(commandNames[i], CMD_TF2ItemPlugin_CosmeticManager, ADMFLAG_GENERIC, "Manage your cosmetics on the server.");
 
-	// Connect to the SQlite database.
-	Database.Connect(TF2ItemPlugin_SQL_ConnectToDatabase, "tf2itemplugins_db");
+    // Connect to the SQlite database.
+    Database.Connect(TF2ItemPlugin_SQL_ConnectToDatabase, "tf2itemplugins_db");
 }
 
 public void OnClientAuthorized(int client, const char[] auth)
 {
-	// Initialize the inventory for the client.
-	TF2ItemPlugin_InitializeInventory(client);
+    // Initialize the inventory for the client.
+    TF2ItemPlugin_InitializeInventory(client);
 
-	// Search for the client's preferences.
-	TF2ItemPlugin_SQL_SearchPlayerPreferences(client);
+    // Search for the client's preferences.
+    TF2ItemPlugin_SQL_SearchPlayerPreferences(client);
 
-	// Disable their cooldown flag.
-	g_bIsOnDatabaseCooldown[client] = false;
+    // Disable their cooldown flag.
+    g_bIsOnDatabaseCooldown[client] = false;
 }
 
 public void OnMapStart()
 {
-	// Attach hooks to the spawn room entities.
-	TF2ItemPlugin_AttachSpawnRoomHooks();
+    // Attach hooks to the spawn room entities.
+    TF2ItemPlugin_AttachSpawnRoomHooks();
 
-	// Setup an HTTP request to obtain latest Unusual effects information.
-	char url[512];
-	g_cvar_cosmetics_unusualEffectsURL.GetString(url, sizeof(url));
+    // Setup an HTTP request to obtain latest Unusual effects information.
+    char url[512];
+    g_cvar_cosmetics_unusualEffectsURL.GetString(url, sizeof(url));
 
-	LogMessage("Requesting Unusual effects information from %s", url);
+    LogMessage("Requesting Unusual effects information from %s", url);
 
-	TF2ItemPlugin_RequestUnusualEffectsData(url);
+    TF2ItemPlugin_RequestUnusualEffectsData(url);
 }
 
 public Action CMD_TF2ItemPlugin_CosmeticManager(int client, int args)
 {
-	// If the client is not in a spawn room and the cvar is enabled, notify them.
-	if (!g_bInSpawnRoom[client] && g_cvar_cosmetics_onlySpawn.BoolValue)
-	{
-		CPrintToChat(client, "%s You must be in a spawn room to manage your cosmetic items.", PLUGIN_CHATTAG);
-		return Plugin_Handled;
-	}
+    // If the client is not in a spawn room and the cvar is enabled, notify them.
+    if (!g_bInSpawnRoom[client] && g_cvar_cosmetics_onlySpawn.BoolValue)
+    {
+        CPrintToChat(client, "%s You must be in a spawn room to manage your cosmetic items.", PLUGIN_CHATTAG);
+        return Plugin_Handled;
+    }
 
-	// Open the cosmetics menu for the client.
-	TF2ItemPlugin_Menus_MainMenu(client);
+    // Open the cosmetics menu for the client.
+    TF2ItemPlugin_Menus_MainMenu(client);
 
-	return Plugin_Handled;
+    return Plugin_Handled;
 }

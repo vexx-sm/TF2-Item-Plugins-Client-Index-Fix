@@ -1,3 +1,11 @@
+#include <sourcemod>
+#include <sdktools>
+#include <sdkhooks>
+#include <tf2>
+#include <tf2_stocks>
+#include <tf2attributes>
+#include <steamworks>
+
 #include "tf2itemplugin/tf2itemplugin_base.sp"
 #include "tf2itemplugin/tf2itemplugin_weapon_base.sp"
 #include "tf2itemplugin/tf2itemplugin_weapon_sqlite.sp"
@@ -9,15 +17,15 @@
 #pragma newdecls required
 
 #define PLUGIN_VERSION "4.0.0"
-#define DEBUG		   false
+#define DEBUG          false
 
 public Plugin myinfo =
 {
-	name		= "TF2 Item Plugins - Weapons Manager",
-	author		= "Lucas 'punteroo' Maza",
-	description = "Customize your weapons and manage your server inventory.",
-	version		= PLUGIN_VERSION,
-	url			= "https://github.com/punteroo/TF2-Item-Plugins"
+    name        = "TF2 Item Plugins - Weapons Manager",
+    author      = "Lucas 'punteroo' Maza",
+    description = "Customize your weapons and manage your server inventory.",
+    version     = PLUGIN_VERSION,
+    url         = "https://github.com/punteroo/TF2-Item-Plugins"
 };
 
 /**
@@ -25,20 +33,17 @@ public Plugin myinfo =
  *
  * @return Handle to the "Regenerate" SDK call.
  */
-public Handle TF2ItemPlugin_LoadRegenerateSDK()
+Handle TF2ItemPlugin_LoadRegenerateSDK()
 {
-	// Load TF2 gamedata.
-	Handle hGameConf = LoadGameConfigFile("sm-tf2.games");
-
-	// Prepare the SDK call for the player entity.
-	StartPrepSDKCall(SDKCall_Player);
-
-	// Set the SDK call to find the "Regenerate" signature.
-	PrepSDKCall_SetFromConf(hGameConf, SDKConf_Signature, "Regenerate");
-	PrepSDKCall_AddParameter(SDKType_Bool, SDKPass_Plain);
-
-	// End the SDK call preparation.
-	return EndPrepSDKCall();
+    Handle hGameConf = LoadGameConfigFile("sm-tf2.games");
+    
+    StartPrepSDKCall(SDKCall_Player);
+    PrepSDKCall_SetFromConf(hGameConf, SDKConf_Signature, "Regenerate");
+    PrepSDKCall_AddParameter(SDKType_Bool, SDKPass_Plain);
+    
+    Handle call = EndPrepSDKCall();
+    delete hGameConf;
+    return call;
 }
 
 /**
@@ -46,236 +51,226 @@ public Handle TF2ItemPlugin_LoadRegenerateSDK()
  *
  * @return void
  */
-public void TF2ItemPlugin_AttachSpawnRoomHooks()
+void TF2ItemPlugin_AttachSpawnRoomHooks()
 {
-	// Declare a starting index for the spawn room entities.
-	int trigger = -1;
-
-	while ((trigger = FindEntityByClassname(trigger, "func_respawnroom")) != -1)
-	{
-		// Hook callbacks into the trigger.
-		SDKHook(trigger, SDKHook_StartTouch, OnStartTouchSpawnRoom);
-		SDKHook(trigger, SDKHook_EndTouch, OnEndTouchSpawnRoom);
-	}
+    int trigger = -1;
+    while ((trigger = FindEntityByClassname(trigger, "func_respawnroom")) != -1)
+    {
+        SDKHook(trigger, SDKHook_StartTouch, OnStartTouchSpawnRoom);
+        SDKHook(trigger, SDKHook_EndTouch, OnEndTouchSpawnRoom);
+    }
 }
 
 public Action OnStartTouchSpawnRoom(int entity, int other)
 {
-	// Is this entity a player?
-	if (!IsClientInGame(other))
-		return Plugin_Continue;
-
-	// If player is alive and real, mark them as in spawn room.
-	if (IsPlayerAlive(other) && !IsClientSourceTV(other) && !IsClientObserver(other) && other <= MaxClients)
-		g_bInSpawnRoom[GetClientOfUserId(other)] = true;
-
-	return Plugin_Continue;
+    if (IsValidClient(other))
+        g_bInSpawnRoom[other] = true;
+    return Plugin_Continue;
 }
 
 public Action OnEndTouchSpawnRoom(int entity, int other)
 {
-	// Is this entity a player?
-	if (!IsClientInGame(other))
-		return Plugin_Continue;
-
-	// If player is alive and real, mark them as not in spawn room.
-	if (IsPlayerAlive(other) && !IsClientSourceTV(other) && !IsClientObserver(other))
-		g_bInSpawnRoom[GetClientOfUserId(other)] = false;
-
-	return Plugin_Continue;
+    if (IsValidClient(other))
+        g_bInSpawnRoom[other] = false;
+    return Plugin_Continue;
 }
 
 public void OnPluginStart()
 {
-	g_cvar_weapons_onlySpawn			 = CreateConVar("tf2items_weapons_spawnonly", "0.0",
-														"If enabled, weapon changes are only allowed when the player is within a spawn room.", 0, true, 0.0, true, 1.0);
+    g_cvar_weapons_onlySpawn = CreateConVar("tf2items_weapons_spawnonly", "0", "If enabled, weapon changes are only allowed when the player is within a spawn room.", _, true, 0.0, true, 1.0);
+    g_cvar_weapons_paintKitsUrl = CreateConVar("tf2items_weapons_paintkits_url", "https://raw.githubusercontent.com/punteroo/TF2-Item-Plugins/production/tf2_protos.json", "The URL to the JSON file containing the War Paints and their IDs. Must be a valid JSON array.");
+    g_cvar_weapons_searchTimeout = CreateConVar("tf2items_weapons_search_timeout", "20.0", "The amount of time in seconds to wait for a search to complete before timing out.", _, true, 5.0, true, 60.0);
+    g_cvar_weapons_databaseCooldown = CreateConVar("tf2items_weapons_database_cooldown", "15.0", "The amount of time in seconds to wait before a player can perform a database action. -1 disables the cooldown.", _, true, -1.0);
 
-	g_cvar_weapons_paintKitsUrl			 = CreateConVar("tf2items_weapons_paintkits_url", "https://raw.githubusercontent.com/punteroo/TF2-Item-Plugins/production/tf2_protos.json",
-														"The URL to the JSON file containing the War Paints and their IDs. Must be a valid JSON array.");
+    hRegen = TF2ItemPlugin_LoadRegenerateSDK();
+    clipOff = FindSendPropInfo("CTFWeaponBase", "m_iClip1");
+    ammoOff = FindSendPropInfo("CTFPlayer", "m_iAmmo");
 
-	g_cvar_weapons_searchTimeout		 = CreateConVar("tf2items_weapons_search_timeout", "20.0",
-														"The amount of time in seconds to wait for a search to complete before timing out.", 0, true, 5.0, true, 60.0);
+    RegConsoleCmd("sm_weapons", CMD_TF2ItemPlugin_WeaponManager, "Manage weapons on the server.");
+    RegConsoleCmd("sm_weapon", CMD_TF2ItemPlugin_WeaponManager, "Manage weapons on the server.");
+    RegConsoleCmd("sm_wep", CMD_TF2ItemPlugin_WeaponManager, "Manage weapons on the server.");
+    RegConsoleCmd("sm_weps", CMD_TF2ItemPlugin_WeaponManager, "Manage weapons on the server.");
 
-	g_cvar_weapons_databaseCooldown		 = CreateConVar("tf2items_weapons_database_cooldown", "15.0",
-														"The amount of time in seconds to wait before a player can perform a database action. -1 disables the cooldown.", 0, true, -1.0, false);
-
-	// Load the "Regenerate" SDK call.
-	hRegen								 = TF2ItemPlugin_LoadRegenerateSDK();
-
-	// Find the network offsets for the weapon clip and ammo.
-	clipOff								 = FindSendPropInfo("CTFWeaponBase", "m_iClip1");
-	ammoOff								 = FindSendPropInfo("CTFPlayer", "m_iAmmo");
-
-	// Register the weapon commands.
-	static const char commandNames[][24] = { "sm_weapons", "sm_weapon", "sm_wep", "sm_weps" };
-	for (int i = 0; i < sizeof(commandNames); i++)
-		RegAdminCmd(commandNames[i], CMD_TF2ItemPlugin_WeaponManager, ADMFLAG_GENERIC, "Manage weapons on the server.");
-
-	// Connect to the SQlite database.
-	Database.Connect(TF2ItemPlugin_SQL_ConnectToDatabase, "tf2itemplugins_db");
+    Database.Connect(TF2ItemPlugin_SQL_ConnectToDatabase, "tf2itemplugins_db");
 
 #if defined DEBUG
-	RegAdminCmd("sm_weapons_debug", CMD_TF2ItemPlugin_DebugInventory, ADMFLAG_GENERIC, "Print the player's inventory state.");
-	RegAdminCmd("sm_weapons_debug_current", CMD_TF2ItemPlugin_DebugCurrent, ADMFLAG_GENERIC, "Print the player's current weapon state.");
-	RegAdminCmd("sm_weapons_debug_force_call", CMD_TF2ItemPlugin_ForceCall, ADMFLAG_GENERIC, "Force a call to the Regenerate function.");
+    RegAdminCmd("sm_weapons_debug", CMD_TF2ItemPlugin_DebugInventory, ADMFLAG_ROOT, "Print the player's inventory state.");
+    RegAdminCmd("sm_weapons_debug_current", CMD_TF2ItemPlugin_DebugCurrent, ADMFLAG_ROOT, "Print the player's current weapon state.");
+    RegAdminCmd("sm_weapons_debug_force_call", CMD_TF2ItemPlugin_ForceCall, ADMFLAG_ROOT, "Force a call to the Regenerate function.");
 #endif
 }
 
 public void OnMapStart()
 {
-	// Attach hooks to the spawn room entities.
-	TF2ItemPlugin_AttachSpawnRoomHooks();
+    TF2ItemPlugin_AttachSpawnRoomHooks();
 
-	// Setup an HTTP request to obtain latest paint kit information.
-	char url[512];
-	g_cvar_weapons_paintKitsUrl.GetString(url, sizeof(url));
-
-	LogMessage("Requesting paint kit data from %s", url);
-
-	TF2ItemPlugin_RequestPaintKitData(url);
+    char url[512];
+    g_cvar_weapons_paintKitsUrl.GetString(url, sizeof(url));
+    LogMessage("Requesting paint kit data from %s", url);
+    TF2ItemPlugin_RequestPaintKitData(url);
 }
 
 public void OnClientAuthorized(int client)
 {
-	// Initialize the client's inventory.
-	TF2ItemPlugin_InitializeInventory(client);
-
-	// Search for the client's preferences.
-	TF2ItemPlugin_SQL_SearchPlayerPreferences(client);
-
-	// Disable their cooldown flag.
-	g_bIsOnDatabaseCooldown[client] = false;
+    TF2ItemPlugin_InitializeInventory(client);
+    TF2ItemPlugin_SQL_SearchPlayerPreferences(client);
+    g_bIsOnDatabaseCooldown[client] = false;
 }
 
 public Action CMD_TF2ItemPlugin_WeaponManager(int client, int args)
 {
-	// If the client is not in a spawn room and the cvar is enabled, notify them.
-	if (!g_bInSpawnRoom[client] && g_cvar_weapons_onlySpawn.BoolValue)
-	{
-		CPrintToChat(client, "%s You must be in a spawn room to manage your weapons.", PLUGIN_CHATTAG);
-		return Plugin_Handled;
-	}
+    if (!IsValidClient(client))
+        return Plugin_Handled;
 
-	// Build and open the main menu.
-	TF2ItemPlugin_Menus_MainMenu(client);
+    if (!g_bInSpawnRoom[client] && g_cvar_weapons_onlySpawn.BoolValue)
+    {
+        CPrintToChat(client, "%s You must be in a spawn room to manage your weapons.", PLUGIN_CHATTAG);
+        return Plugin_Handled;
+    }
 
-	return Plugin_Handled;
+    TF2ItemPlugin_Menus_MainMenu(client);
+    return Plugin_Handled;
 }
 
 #if defined DEBUG
-
-void		Print_Slot(int client, int class, int slot)
+void Print_Slot(int client, int class, int slot)
 {
-	PrintToConsole(client, "Slot %d:\n" ... "Client ID: %d\n" ... "Class ID: %d\n" ... "Slot ID: %d\n" ... "Active Override: %d\n" ... "Weapon Def Index: %d\n" ... "Stock Def Index: %d\n" ... "Quality: %d\n" ... "Level: %d\n" ... "Australium: %d\n" ... "Festive: %d\n" ... "Unusual Effect: %d\n" ... "War Paint ID: %d\n" ... "War Paint Wear: %f\n" ... "- Killstreak:\n" ... "  - Active: %d\n" ... "  - Tier: %d\n" ... "  - Sheen: %d\n" ... "  - Killstreaker: %d\n" ... "Spells Bitfield: %d\n" ... "\n\n",
-				   slot, g_inventories[client][class][slot].client,
-				   g_inventories[client][class][slot].class, g_inventories[client][class][slot].slotId,
-				   g_inventories[client][class][slot].isActiveOverride, g_inventories[client][class][slot].weaponDefIndex, g_inventories[client][class][slot].stockWeaponDefIndex,
-				   g_inventories[client][class][slot].quality, g_inventories[client][class][slot].level,
-				   g_inventories[client][class][slot].isAustralium, g_inventories[client][class][slot].isFestive,
-				   g_inventories[client][class][slot].unusualEffectId, g_inventories[client][class][slot].warPaintId,
-				   g_inventories[client][class][slot].warPaintWear, g_inventories[client][class][slot].killstreak.isActive,
-				   g_inventories[client][class][slot].killstreak.tier, g_inventories[client][class][slot].killstreak.sheen,
-				   g_inventories[client][class][slot].killstreak.killstreaker, g_inventories[client][class][slot].halloweenSpell.spells);
+    PrintToConsole(client, "Slot %d:\n"
+        ... "Client ID: %d\n"
+        ... "Class ID: %d\n"
+        ... "Slot ID: %d\n"
+        ... "Active Override: %d\n"
+        ... "Weapon Def Index: %d\n"
+        ... "Stock Def Index: %d\n"
+        ... "Quality: %d\n"
+        ... "Level: %d\n"
+        ... "Australium: %d\n"
+        ... "Festive: %d\n"
+        ... "Unusual Effect: %d\n"
+        ... "War Paint ID: %d\n"
+        ... "War Paint Wear: %f\n"
+        ... "- Killstreak:\n"
+        ... "  - Active: %d\n"
+        ... "  - Tier: %d\n"
+        ... "  - Sheen: %d\n"
+        ... "  - Killstreaker: %d\n"
+        ... "Spells Bitfield: %d\n"
+        ... "\n\n",
+        slot, g_inventories[client][class][slot].client,
+        g_inventories[client][class][slot].class, g_inventories[client][class][slot].slotId,
+        g_inventories[client][class][slot].isActiveOverride, g_inventories[client][class][slot].weaponDefIndex, g_inventories[client][class][slot].stockWeaponDefIndex,
+        g_inventories[client][class][slot].quality, g_inventories[client][class][slot].level,
+        g_inventories[client][class][slot].isAustralium, g_inventories[client][class][slot].isFestive,
+        g_inventories[client][class][slot].unusualEffectId, g_inventories[client][class][slot].warPaintId,
+        g_inventories[client][class][slot].warPaintWear, g_inventories[client][class][slot].killstreak.isActive,
+        g_inventories[client][class][slot].killstreak.tier, g_inventories[client][class][slot].killstreak.sheen,
+        g_inventories[client][class][slot].killstreak.killstreaker, g_inventories[client][class][slot].halloweenSpell.spells);
 }
 
 public Action CMD_TF2ItemPlugin_DebugInventory(int client, int args)
 {
-	PrintToConsole(client, "Inventory Debug\n\n\n");
+    if (!IsValidClient(client))
+        return Plugin_Handled;
 
-	// If arguments were passed, interpret them as either a class, or a class and a slot index.
-	if (args >= 1)
-	{
-		char class[2];
-		GetCmdArg(1, class, sizeof(class));
+    PrintToConsole(client, "Inventory Debug\n\n\n");
 
-		int iclass = StringToInt(class);
+    if (args >= 1)
+    {
+        char class[2];
+        GetCmdArg(1, class, sizeof(class));
+        int iclass = StringToInt(class);
 
-		if (args >= 2)
-		{
-			char slot[2];
-			GetCmdArg(2, slot, sizeof(slot));
+        if (args >= 2)
+        {
+            char slot[2];
+            GetCmdArg(2, slot, sizeof(slot));
+            int islot = StringToInt(slot);
 
-			int islot = StringToInt(slot);
+            PrintToConsole(client, "For class %d, slot %d\n", iclass, islot);
+            Print_Slot(client, iclass, islot);
+            return Plugin_Handled;
+        }
 
-			PrintToConsole(client, "For class %d, slot %d\n", iclass, islot);
+        PrintToConsole(client, "For class %d\n", iclass);
+        for (int j = 0; j < MAX_WEAPONS; j++)
+            Print_Slot(client, iclass, j);
 
-			Print_Slot(client, iclass, islot);
+        return Plugin_Handled;
+    }
 
-			return Plugin_Handled;
-		}
+    for (int i = 0; i < MAX_CLASSES; i++)
+    {
+        PrintToConsole(client, "For class %d\n", i);
+        for (int j = 0; j < MAX_WEAPONS; j++)
+        {
+            Print_Slot(client, i, j);
+        }
+    }
 
-		PrintToConsole(client, "For class %d\n", iclass);
-
-		for (int j = 0; j < MAX_WEAPONS; j++)
-			Print_Slot(client, iclass, j);
-
-		return Plugin_Handled;
-	}
-
-	for (int i = 0; i < MAX_CLASSES; i++)
-	{
-		PrintToConsole(client, "For class %d\n", i);
-
-		for (int j = 0; j < MAX_WEAPONS; j++)
-		{
-			Print_Slot(client, i, j);
-		}
-	}
-
-	return Plugin_Handled;
+    return Plugin_Handled;
 }
 
 public Action CMD_TF2ItemPlugin_DebugCurrent(int client, int args)
 {
-	int weapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
+    if (!IsValidClient(client))
+        return Plugin_Handled;
 
-	if (weapon == 0)
-	{
-		PrintToConsole(client, "No weapon found.");
-		return Plugin_Handled;
-	}
+    int weapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
 
-	int	  defIndex = GetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex");
+    if (!IsValidEntity(weapon))
+    {
+        PrintToConsole(client, "No weapon found.");
+        return Plugin_Handled;
+    }
 
-	// attributes
-	int	  indexes[16];
-	float values[16];
-	TF2Attrib_GetSOCAttribs(weapon, indexes, values);
+    int defIndex = GetEntProp(weapon, Prop_Send, "m_iItemDefinitionIndex");
 
-	PrintToConsole(client, "Current Weapon: %d\n" ... "Item Definition Index: %d\n\n", weapon, defIndex);
+    int indexes[16];
+    float values[16];
+    TF2Attrib_GetSOCAttribs(weapon, indexes, values);
 
-	PrintToConsole(client, "SOC Attributes\n\n");
-	for (int i = 0; i < 16; i++)
-	{
-		if (indexes[i] == 0)
-			break;
+    PrintToConsole(client, "Current Weapon: %d\n"
+        ... "Item Definition Index: %d\n\n", weapon, defIndex);
 
-		PrintToConsole(client, "SOC Attribute %d: %d = %f", i, indexes[i], values[i]);
-	}
+    PrintToConsole(client, "SOC Attributes\n\n");
+    for (int i = 0; i < 16; i++)
+    {
+        if (indexes[i] == 0)
+            break;
 
-	PrintToConsole(client, "Attributes\n\n");
+        PrintToConsole(client, "SOC Attribute %d: %d = %f", i, indexes[i], values[i]);
+    }
 
-	int attributes[16];
-	int count = TF2Attrib_ListDefIndices(weapon, attributes);
+    PrintToConsole(client, "Attributes\n\n");
 
-	for (int i = 0; i < count; i++)
-	{
-		if (attributes[i] == 0)
-			continue;
+    int attributes[16];
+    int count = TF2Attrib_ListDefIndices(weapon, attributes);
 
-		Address attrib = TF2Attrib_GetByDefIndex(weapon, attributes[i]);
-		float	value  = TF2Attrib_GetValue(attrib);
+    for (int i = 0; i < count; i++)
+    {
+        if (attributes[i] == 0)
+            continue;
 
-		PrintToConsole(client, "Attribute %d: %d = %f", i, attributes[i], value);
-	}
+        Address attrib = TF2Attrib_GetByDefIndex(weapon, attributes[i]);
+        float value = TF2Attrib_GetValue(attrib);
 
-	return Plugin_Handled;
+        PrintToConsole(client, "Attribute %d: %d = %f", i, attributes[i], value);
+    }
+
+    return Plugin_Handled;
 }
 
 public Action CMD_TF2ItemPlugin_ForceCall(int client, int args)
 {
-	SDKCall(hRegen, client, 0);
+    if (!IsValidClient(client))
+        return Plugin_Handled;
 
-	return Plugin_Handled;
+    SDKCall(hRegen, client, false);
+    return Plugin_Handled;
 }
 #endif
+
+bool IsValidClient(int client)
+{
+    return (client > 0 && client <= MaxClients && IsClientInGame(client) && !IsClientSourceTV(client) && !IsClientReplay(client));
+}
